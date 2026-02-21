@@ -23,9 +23,7 @@
 
 (defun encode-set (a b c)
   (declare (optimize speed) (type (unsigned-byte 5) a b c))
-  (+ (aref *binomial-table* a 1)
-     (aref *binomial-table* b 2)
-     (aref *binomial-table* c 3)))
+  (+ a (aref *binomial-table* b 2) (aref *binomial-table* c 3)))
 
 (defun decode-set (index)
   (declare (optimize speed) (type (unsigned-byte 10) index))
@@ -38,7 +36,7 @@
          (rem2 (- rem3 (aref *binomial-table* n2 2)))
 
          (n1 (loop for n from (1- n2) downto 0
-                   if (<= (aref *binomial-table* n 1) rem2) return n)))
+                   if (<= n rem2) return n)))
     (values n1 n2 n3)))
 
 (defun reencode-wolf-index (mask state)
@@ -244,7 +242,7 @@
      (unwind-protect
           (iter (for last-progress = (length results))
             (while (< last-progress 256))
-            (sleep 1)
+            (sleep .1)
             (iter (for r = (lparallel:try-receive-result channel))
               (while r)
               (push r results))
