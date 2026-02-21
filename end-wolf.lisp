@@ -140,7 +140,8 @@
             (error "wolf index ~a" state))))
       (finally (return n)))))
 
-(declaim (inline sheep-forward wolf-forward))
+(declaim (inline sheep-forward wolf-forward
+                 sheep-backward wolf-move-backward))
 
 (defun sheep-forward (state cont)
   (declare (optimize speed)
@@ -168,6 +169,8 @@
                 (consider-move nil (> i 0) (- bitpos 5))
                 (consider-move nil (< i 4) (+ bitpos 5))))))
         (incf bitpos)))))
+(defun sheep-backward (state cont)
+  (sheep-forward state cont))
 
 (defun wolf-forward (state cont)
   (declare (optimize speed)
@@ -341,22 +344,38 @@
               (setf (bref wolf state) fate))))))
     (format t "~&Sheep move, ~a pieces.~%" n-piece)
     (sb-thread:barrier (:memory))
-    (do-states (state n-piece) ()
-      (declare (optimize speed))
-      (when (= (logcount (ldb (byte 25 0) state)) n-piece)
-        (when (<= (ldb (byte 10 25) state) max-wolf-index)
-          (when (= (bref sheep state) +unknown+)
-            (let ((fate +wolf+))
-              (declare (type fate fate))
-              (sheep-forward state
-                             (lambda (next-state)
-                               (declare (type state next-state))
-                               (let ((next-fate (bref wolf next-state)))
-                                 (setq fate (logxor (max (logxor fate 1) (logxor next-fate 1)) 1)))))
-              (setf (bref sheep state) fate))))))
-    nil))
+    (let ((results
+            (do-states (state n-piece)
+                ((delta-sheep 0) (delta-wolf 0))
+              (declare (optimize speed) (fixnum delta-sheep delta-wolf))
+              (when (= (logcount (ldb (byte 25 0) state)) n-piece)
+                (when (<= (ldb (byte 10 25) state) max-wolf-index)
+                  (when (= (bref sheep state) +unknown+)
+                    (let ((fate +wolf+))
+                      (declare (type fate fate))
+                      (sheep-forward state
+                                     (lambda (next-state)
+                                       (declare (type state next-state))
+                                       (let ((next-fate (bref wolf next-state)))
+                                         (setq fate (logxor (max (logxor fate 1) (logxor next-fate 1)) 1)))))
+                      (case fate
+                        (#.+sheep+
+                         (incf delta-sheep)
+                         (setf (bref sheep state) +sheep+))
+                        (#.+wolf+ (incf delta-wolf)
+                         (setf (bref sheep state) +wolf+))))))))))
+      (apply #'mapcar #'+ results))))
 
 (defvar *endgames*)
+
+(defun run (n-iter n-piece)
+  (assert (<= 7 n-piece 17))
+  (iter (repeat n-iter)
+    (destructuring-bind (delta-sheep delta-wolf) (forward *endgames* n-piece)
+      (when (and (zerop delta-wolf) (zerop delta-sheep))
+        (format t "~&===Done===~%")
+        (return))))
+  (tablebase-summary-1 (car *endgames*) n-piece))
 
 (defun load-endgames (sheep-file wolf-file)
   (unless (boundp '*endgames*)
@@ -373,6 +392,14 @@
     (write-sequence (car *endgames*) out))
   (with-open-file (out wolf-file :direction :output :element-type '(unsigned-byte 8))
     (write-sequence (cdr *endgames*) out)))
+
+(defun unload-endgames ()
+  (let ((e *endgames*))
+    (makunbound '*endgames*)
+    (static-vectors:free-static-vector (car e))
+    (setf (car e) nil)
+    (static-vectors:free-static-vector (cdr e))
+    (setf (cdr e) nil)))
 
 #+nil (progn
         (static-vectors:free-static-vector (car *endgames*))
