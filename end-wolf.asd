@@ -2,4 +2,5 @@
   :depends-on (:iterate :static-vectors :lparallel)
   :serial t
   :components
-  ((:file "end-wolf")))
+  ((:file "end-wolf")
+   (:file "dtm")))
