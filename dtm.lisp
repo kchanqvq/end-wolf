@@ -7,7 +7,8 @@
 
 (defconstant +max-n-pieces+ 10)
 
-(defvar *worklist-threshold* 10000000)
+(defvar *worklist-threshold* 0.1)
+(defvar *worklist-limit* 10000000)
 
 ;; non inclusive
 (defun max-state (max-n-pieces)
@@ -168,7 +169,8 @@
                       (unless (zerop fate)
                         (sheep-backward state
                                         (lambda (prev-state)
-                                          (push prev-state worklist))))
+                                          (when (zerop (aref sheep prev-state))
+                                            (push prev-state worklist)))))
                       (setf (aref wolf state) fate))))))))
       (sort-worklist (mapcan #'car results)))))
 
@@ -183,7 +185,7 @@
                    (lparallel:future
                      (merge 'list (lparallel:force a) (lparallel:force b) #'<)))
                  segments))
-        (car segments))))
+        (lparallel:force (car segments)))))
 
 (defun sort-worklist (worklist)
   (setq worklist (parallel-sort worklist))
@@ -242,19 +244,19 @@
     (let ((results
             (do-worklist (state worklist) ((worklist))
               (declare (optimize speed))
-              (when (zerop (aref sheep state))
-                (let ((fate +wolf-m1+))
-                  (declare (type fate fate))
-                  (sheep-forward state
-                                 (lambda (next-state)
-                                   (declare (type state next-state))
-                                   (let ((next-fate (aref wolf next-state)))
-                                     (setq fate (min fate (if (< next-fate -1) (1+ next-fate) next-fate))))))
-                  (unless (zerop fate)
-                    (wolf-move-backward state
-                                        (lambda (prev-state)
-                                          (push prev-state worklist))))
-                  (setf (aref sheep state) fate))))))
+              (let ((fate +wolf-m1+))
+                (declare (type fate fate))
+                (sheep-forward state
+                               (lambda (next-state)
+                                 (declare (type state next-state))
+                                 (let ((next-fate (aref wolf next-state)))
+                                   (setq fate (min fate (if (< next-fate -1) (1+ next-fate) next-fate))))))
+                (unless (zerop fate)
+                  (wolf-move-backward state
+                                      (lambda (prev-state)
+                                        (when (zerop (aref wolf prev-state))
+                                          (push prev-state worklist)))))
+                (setf (aref sheep state) fate)))))
       (sort-worklist (mapcan #'car results)))))
 
 (defun wolf-forward-scan-use-worklist (pair worklist)
@@ -276,7 +278,8 @@
                 (unless (zerop fate)
                   (sheep-backward state
                                   (lambda (prev-state)
-                                    (push prev-state worklist))))
+                                    (when (zerop (aref sheep prev-state))
+                                      (push prev-state worklist)))))
                 (setf (aref wolf state) fate)))))
       (sort-worklist (mapcan #'car results)))))
 
@@ -299,13 +302,14 @@
   (assert (<= 7 n-piece +max-n-pieces+))
   (iter (repeat n-iter)
     (wolf-forward-scan *endgames* n-piece)
-    (let ((delta (sheep-forward-scan *endgames* n-piece)))
-      (tablebase-summary (car *endgames*) n-piece)
+    (let* ((delta (sheep-forward-scan *endgames* n-piece))
+           (unknown (tablebase-summary (car *endgames*) n-piece)))
       (format t "~&state change: ~a~%" delta)
       (cond ((zerop delta)
              (format t "~&===Done===~%")
              (return-from run))
-            ((< delta *worklist-threshold*)
+            ((and (< (/ delta unknown) *worklist-threshold*)
+                  (< delta *worklist-limit*))
              (format t "~&===Switch to worklist===~%")
              (format t "use ~a worklist iterations~%" (* n-iter 10))
              (run-worklist (* n-iter 10) n-piece)
