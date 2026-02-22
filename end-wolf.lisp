@@ -555,6 +555,7 @@
     (for worklist
          initially (wolf-forward-scan-create-worklist *endgames* n-piece)
          then (wolf-forward-scan-use-worklist *endgames* worklist))
+    (while worklist)
     (setq worklist (sheep-forward-scan-use-worklist *endgames* worklist))
     (let ((s (length worklist)))
       (format t "~&worklist size: ~a~%" s)
