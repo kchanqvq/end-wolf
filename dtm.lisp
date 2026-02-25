@@ -295,6 +295,19 @@
   (format t "~&===Done===~%")
   (summary n-piece))
 
+(defun run-all (directory-path &optional (max-n-piece 17))
+  (setq directory-path (uiop:ensure-directory-pathname directory-path))
+  (iter (for n-piece from 7 to max-n-piece)
+    (run n-piece)
+    (save-endgames n-piece
+                   (make-pathname :name (format nil "wolf-dtm-~as" n-piece)
+                                  :type "bin" :defaults directory-path)
+                   (make-pathname :name (format nil "wolf-dtm-~aw" n-piece)
+                                  :type "bin" :defaults directory-path))
+    (when (> n-piece 7)
+      (unload-endgames (1- n-piece))))
+  (unload-endgames))
+
 (defun load-endgames (n-piece sheep-file wolf-file)
   (format t "Reading ~a pieces sheep-to-move from ~a.~%" n-piece sheep-file)
   (unless (car (aref *endgames* n-piece))
