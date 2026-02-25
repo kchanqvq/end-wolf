@@ -140,31 +140,33 @@
 (defun parse-encoded (list)
   (multiple-value-call #'encode-mask (parse-mask list)))
 
+(defun random-board-list ()
+  (iter (for wc = 0)
+    (for sc = 0)
+    (for board-list =
+         (iter
+           (for i below 5)
+           (collecting
+             (iter (for j below 5)
+               (collecting
+                 (case (random 5)
+                   ((0 1) '-)
+                   ((2 3) (if (< sc 15)
+                              (prog1 's (incf sc))
+                              '-))
+                   (4 (if (< wc 3)
+                          (prog1 'w (incf wc))
+                          '-))))))))
+    (when (and (= 3 wc) (<= 4 sc 14))
+      (return (values board-list (+ wc sc))))))
+
 (defun fuzz-encode-decode (seed)
   (let ((*random-state* (sb-ext:seed-random-state seed)))
-    (iter (with n = 0)
-      (repeat 100000)
-      (for wc = 0)
-      (for sc = 0)
-      (for state = (iter
-                     (for i below 5)
-                     (collecting
-                       (iter (for j below 5)
-                         (collecting
-                           (case (random 5)
-                             ((0 1) '-)
-                             ((2 3) (if (< sc 15)
-                                        (prog1 's (incf sc))
-                                        '-))
-                             (4 (if (< wc 3)
-                                    (prog1 'w (incf wc))
-                                    '-))))))))
-      (unless (< wc 3)
-        (incf n)
-        (multiple-value-bind (encoded n) (parse-state state)
-          (unless (equal state (list-state encoded n))
-            (error "state ~a" state))))
-      (finally (return n)))))
+    (iter (repeat 100000)
+      (for (values board-list n) = (random-board-list))
+      (for encoded = (parse-encoded board-list))
+      (unless (equal board-list (list-encoded encoded n))
+        (error "encode/decode does not round trip~%~a" board-list)))))
 
 ;;; Advance mask for state+1
 
@@ -268,7 +270,7 @@
       (declare (board down cap))
       (loop while (plusp down) do
         (let ((low-bit (logand down (- down))))
-          (setf down (logand down (1- down)))
+          (setf down (logxor down low-bit))
           (funcall move-cont sm (+ wm (* low-bit #b11111)))))
       (loop while (plusp cap) do
         (let ((low-bit (logand cap (- cap))))
@@ -280,9 +282,25 @@
       (declare (board up-to cap-to))
       (loop while (plusp up-to) do
         (let ((low-bit (logand up-to (- up-to))))
-          (setf up-to (logand up-to (1- up-to)))
+          (setf up-to (logxor up-to low-bit))
           (funcall move-cont sm (- wm (* low-bit #b11111)))))
       (loop while (plusp cap-to) do
         (let ((low-bit (logand cap-to (- cap-to))))
           (setf cap-to (logxor cap-to low-bit))
           (funcall cap-cont (- sm low-bit) (- wm (* low-bit #b1111111111))))))))
+
+(defun fuzz-sheep-forward-backward (seed)
+  (let ((*random-state* (sb-ext:seed-random-state seed)))
+    (iter (repeat 100000)
+      (for board-list = (random-board-list))
+      (for (values sm wm) = (parse-mask board-list))
+      (for round-tripped = nil)
+      (sheep-forward
+       sm wm
+       (lambda (next-sm next-wm)
+         (sheep-backward next-sm next-wm
+                         (lambda (sm-1 wm-1)
+                           (when (and (= sm-1 sm) (= wm-1 wm))
+                             (setq round-tripped t))))))
+      (unless round-tripped
+        (error "Sheep forward/backward does not round trip~%~a" board-list)))))
