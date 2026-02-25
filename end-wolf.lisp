@@ -232,11 +232,8 @@
 (defun sheep-backward (sm wm cont)
   (sheep-forward sm wm cont))
 
-(defun wolf-move-forward (sm wm cont)
-  (sheep-forward wm sm (lambda (wm sm) (funcall cont sm wm))))
-
 (defun wolf-move-backward (sm wm cont)
-  (wolf-move-forward sm wm cont))
+  (sheep-forward wm sm (lambda (wm sm) (funcall cont sm wm))))
 
 (defun wolf-forward (sm wm move-cont cap-cont)
   (declare (optimize speed)
@@ -244,7 +241,7 @@
            (function move-cont cap-cont))
   (let ((em (lognot (logior wm sm))))
     (let* ((right (logand wm (ash em -1) #b0111101111011110111101111))
-           (cap (logand right (ash sm -2) #b0011101111001110011100111)))
+           (cap (logand right (ash sm -2) #b0011100111001110011100111)))
       (declare (board right cap))
       (loop while (plusp right) do
         (let ((low-bit (logand right (- right))))
@@ -255,7 +252,7 @@
           (setf cap (logxor cap low-bit))
           (funcall cap-cont (- sm (* low-bit #b100)) (+ wm (* low-bit #b11))))))
     (let* ((left-to (logand (ash wm -1) em #b0111101111011110111101111))
-           (cap-to (logand (ash left-to -1) sm #b0011101111001110011100111)))
+           (cap-to (logand (ash left-to -1) sm #b0011100111001110011100111)))
       (declare (board left-to cap-to))
       (loop while (plusp left-to) do
         (let ((low-bit (logand left-to (- left-to))))
@@ -288,19 +285,3 @@
         (let ((low-bit (logand cap-to (- cap-to))))
           (setf cap-to (logxor cap-to low-bit))
           (funcall cap-cont (- sm low-bit) (- wm (* low-bit #b1111111111))))))))
-
-(defun fuzz-sheep-forward-backward (seed)
-  (let ((*random-state* (sb-ext:seed-random-state seed)))
-    (iter (repeat 100000)
-      (for board-list = (random-board-list))
-      (for (values sm wm) = (parse-mask board-list))
-      (for round-tripped = nil)
-      (sheep-forward
-       sm wm
-       (lambda (next-sm next-wm)
-         (sheep-backward next-sm next-wm
-                         (lambda (sm-1 wm-1)
-                           (when (and (= sm-1 sm) (= wm-1 wm))
-                             (setq round-tripped t))))))
-      (unless round-tripped
-        (error "Sheep forward/backward does not round trip~%~a" board-list)))))
