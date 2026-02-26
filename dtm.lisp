@@ -7,7 +7,7 @@
 
 (defvar *worklist-threshold* 0.1)
 (defvar *worklist-min-n-iter* 3)
-(defvar *worklist-limit* (floor (sb-ext:dynamic-space-size) 800))
+(defvar *worklist-limit* (floor (sb-ext:dynamic-space-size) 1200))
 
 (defvar *n-tasks* 64)
 
@@ -272,9 +272,9 @@
   (format t "~&===Done===~%")
   (summary n-piece))
 
-(defun run-all (directory-path &optional (max-n-piece 18))
+(defun run-all (directory-path &key (from 7) (to 18))
   (setq directory-path (uiop:ensure-directory-pathname directory-path))
-  (iter (for n-piece from 7 to max-n-piece)
+  (iter (for n-piece from from to to)
     (run n-piece)
     (save-endgames n-piece
                    (make-pathname :name (format nil "wolf-dtm-~as" n-piece)
