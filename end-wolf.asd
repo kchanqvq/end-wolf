@@ -3,4 +3,5 @@
   :serial t
   :components
   ((:file "end-wolf")
-   (:file "dtm")))
+   (:file "dtm")
+   (:file "dtcd")))
