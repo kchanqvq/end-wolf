@@ -1,9 +1,9 @@
 (in-package #:end-wolf)
 
-(deftype fate () '(signed-byte 16))
+(deftype fate () '(signed-byte 8))
 
-(defconstant +wolf-m1+ (1- (ash 1 15)))
-(defconstant +sheep-m1+ (- (ash 1 15)))
+(defconstant +wolf-m1+ (1- (ash 1 7)))
+(defconstant +sheep-m1+ (- (ash 1 7)))
 
 (defvar *worklist-threshold* 0.1)
 (defvar *worklist-min-n-iter* 3)
@@ -13,7 +13,7 @@
 
 (deftype tablebase () `(simple-array fate (*)))
 
-(defvar *endgames* (make-array 18 :initial-contents (iter (repeat 18) (collect (cons nil nil)))))
+(defvar *endgames* (make-array 19 :initial-contents (iter (repeat 19) (collect (cons nil nil)))))
 
 (setq *print-length* 1000)
 
